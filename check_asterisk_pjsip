@@ -102,9 +102,9 @@ sub parse_reg($) {
             my $status = $1;
             $DEBUG > 1 && print STDERR " Reg found for $reg; status: $status\n";
             if ($status =~ /registered/i) {
-                check_is_ok ("Status for $reg is $status")
+                check_is_ok ("Registation status for $reg is $status")
             } else {
-                check_is_crit ("Status for $reg is $status")
+                check_is_crit ("Registation status for $reg is $status")
             }
         }
     }
@@ -122,12 +122,26 @@ foreach my $reg (@REGISTRATIONS) {
 # --endpoint
 sub parse_endp($) {
     my ($endp) = @_;
+    my $found = 0;
 
     my $fh = open_asterisk_cmd('pjsip show endpoints');
     while (<$fh>) {
+#       Contact:  HT1/sip:192.168.115.60                     20f051ecf1 Avail        12.243
+
         $DEBUG > 5 && print STDERR "Endp output: $_";
+
+        if (m{^\s*Contact:\s*${endp}/\S*\s+\S+\s+(\S+)}) {
+            $found++;
+            my $status = $1;
+            $DEBUG > 1 && print STDERR " Endp found for $endp; status: $status\n";
+            if ($status =~ /Avail/i) {
+                check_is_ok ("Endpoint status for $endp is $status")
+            } else {
+                check_is_crit ("Endpoint status for $endp is $status")
+            }
+        }
     }
-    die "FIXME WIP"
+    if ($found != 1) { check_is_warn ("Found $found endpoint results for $endp, was expecting only one") }
 }
 foreach my $endp (@ENDPOINTS) {
     if ($endp =~ /^(${VALID_NAME_REGEX})$/) { $endp = $1 } else { die "Invalid name in $endp" }
