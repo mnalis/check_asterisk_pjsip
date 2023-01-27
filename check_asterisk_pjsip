@@ -7,15 +7,15 @@
 
 use warnings;
 use strict;
-use Getopt::Std;
+use Getopt::Long qw(:config auto_version);
 
 our $VERSION = '1.00';
 %ENV = ( PATH => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' );
-my $ASTERISK = "asterisk -x";
+my $ASTERISK = "/usr/sbin/asterisk";
 
 # no user configurable parts below
-$Getopt::Std::STANDARD_HELP_VERSION = 1;
 my $VALID_NAME_REGEX='[a-zA-Z0-9_\-]+';
+my $DEBUG = 0;
 
 my %NAGIOS = (
     STATE_OK => 0,
@@ -24,47 +24,87 @@ my %NAGIOS = (
     STATE_UNKNOWN => 3,
 );
 
-my $status = 'STATE_UNKNOWN';
+my $ret_value = $NAGIOS{'STATE_UNKNOWN'};
 
-# Getopt::Std --version message
-sub VERSION_MESSAGE {
-    print STDERR "check_asterisk_pjsip $VERSION\n";
-}
-
-# Getopt::Std --version message
-sub HELP_MESSAGE {
+# --help
+sub print_help() {
     print STDERR <<EOF;
+check_asterisk_pjsip $VERSION
 
 Usage: check_asterisk_pjsip [OPTION]...
+
 Options:
-  -r REG1[,REG2]...\t- check registrations
-  -e END1[,END2]...\t- check endpoints
-  -d 1\t\t\t- enable debug
-  --help\t\t- this help
+  --registration|-r REG1[,REG2]...\t- check registrations
+  --endpoint|-e END1[,END2]...\t\t- check endpoints
+  --debug|-d 1\t\t\t\t- enable debug
+  --help|-h\t\t\t\t- this help
   
-Example: check_asterisk_pjsip -r HT1,HT2 -e TSMTS
+Example: check_asterisk_pjsip -r HT1 -r HT2 --endpoint TSMTS
 EOF
 
     exit $NAGIOS{'STATE_UNKNOWN'};
 }
 
-our %opts;
-my $options = 'd:r:e:';
-getopts($options, \%opts);
 
-my $DEBUG = $opts{'d'} || 0;
+# cmd_exec - executes a given command and return its output
+sub cmd_exec($) {
+    my ($cmd) = @_;
+    $DEBUG > 1 && print STDERR "Executing $ASTERISK $cmd";
+    
+    open(my $fh, "-|", $ASTERISK, "-x", $cmd) || die "Can't exec: '$ASTERISK -x $cmd': $! ($?)";
+    
+    my $ret = '';
+    while (<$fh>) {
+        $ret .= $_;
+    }
+    return $ret;
+}
+
+### MAIN ###
+
+my $did_something = 0;
+my @REGISTRATIONS = ();
+my @ENDPOINTS = ();
+
+GetOptions (
+    'registration=s' => \@REGISTRATIONS,
+    'endpoint=s' => \@ENDPOINTS,
+    'debug=i' => \$DEBUG,
+    'help' => sub { print_help() }
+    );
+
 if ($DEBUG =~ /^(\d+)$/) { $DEBUG = $1 } else { die "invalid param -d $DEBUG" }
 
-#my @REGISTRATIONS=();
-#while ($opts{'r'} =~ /^(?:(${VALID_NAME_REGEX}),?)$/g) {
-#    print "found: $1\n";
-#}
+# --registration
+sub parse_reg($) {
+    my ($reg) = @_;
+    
+    print STDERR "Output: " . cmd_exec('pjsip show registrations');
+    die "FIXME WIP"
+}
+foreach my $reg (@REGISTRATIONS) {
+    if ($reg =~ /^(${VALID_NAME_REGEX})$/) { $reg = $1 } else { die "Invalid name in $reg" }
+    $DEBUG && print "check registration for: $reg\n";
+    parse_reg($reg);
+    $did_something++;
+}
 
-die "$opts{'r'}";
+# --endpoint
+sub parse_endp($) {
+    my ($endp) = @_;
+    die "FIXME WIP"
+}
+foreach my $endp (@ENDPOINTS) {
+    if ($endp =~ /^(${VALID_NAME_REGEX})$/) { $endp = $1 } else { die "Invalid name in $endp" }
+    $DEBUG && print "check endpoint for: $endp\n";
+    parse_endp($endp);
+    $did_something++;
+}
 
-if (!$opts{'r'} or !$opts{'e'} ) {  # if help requested, or missing required params, show help page
-    Getopt::Std::help_mess($options);
+
+unless ($did_something) {  # if help requested, or missing required params, show help page
+    print_help();
     exit $NAGIOS{'STATE_UNKNOWN'};
 }
 
-exit $NAGIOS{'STATE_UNKNOWN'};
+exit $ret_value;
