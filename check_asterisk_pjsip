@@ -1,8 +1,70 @@
 #!/usr/bin/perl -T
 # GPLv3+ by Matija Nalis <mnalis-perl@axe.tomsoft.hr> started 2023-01-27
+# checks specific Asterisk / Freepbx PJSIP registrations / endpoints
+#
+# FIXME: define "main::HELP_MESSAGE()" and/or "main::VERSION_MESSAGE()" for nicer help texts
+
 
 use warnings;
 use strict;
+use Getopt::Std;
 
+our $VERSION = '1.00';
+%ENV = ( PATH => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' );
+my $ASTERISK = "asterisk -x";
 
-%ENV = ( PATH => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' )
+# no user configurable parts below
+$Getopt::Std::STANDARD_HELP_VERSION = 1;
+my $VALID_NAME_REGEX='[a-zA-Z0-9_\-]+';
+
+my %NAGIOS = (
+    STATE_OK => 0,
+    STATE_WARNING => 1,
+    STATE_CRITICAL => 2,
+    STATE_UNKNOWN => 3,
+);
+
+my $status = 'STATE_UNKNOWN';
+
+# Getopt::Std --version message
+sub VERSION_MESSAGE {
+    print STDERR "check_asterisk_pjsip $VERSION\n";
+}
+
+# Getopt::Std --version message
+sub HELP_MESSAGE {
+    print STDERR <<EOF;
+
+Usage: check_asterisk_pjsip [OPTION]...
+Options:
+  -r REG1[,REG2]...\t- check registrations
+  -e END1[,END2]...\t- check endpoints
+  -d 1\t\t\t- enable debug
+  --help\t\t- this help
+  
+Example: check_asterisk_pjsip -r HT1,HT2 -e TSMTS
+EOF
+
+    exit $NAGIOS{'STATE_UNKNOWN'};
+}
+
+our %opts;
+my $options = 'd:r:e:';
+getopts($options, \%opts);
+
+my $DEBUG = $opts{'d'} || 0;
+if ($DEBUG =~ /^(\d+)$/) { $DEBUG = $1 } else { die "invalid param -d $DEBUG" }
+
+#my @REGISTRATIONS=();
+#while ($opts{'r'} =~ /^(?:(${VALID_NAME_REGEX}),?)$/g) {
+#    print "found: $1\n";
+#}
+
+die "$opts{'r'}";
+
+if (!$opts{'r'} or !$opts{'e'} ) {  # if help requested, or missing required params, show help page
+    Getopt::Std::help_mess($options);
+    exit $NAGIOS{'STATE_UNKNOWN'};
+}
+
+exit $NAGIOS{'STATE_UNKNOWN'};
