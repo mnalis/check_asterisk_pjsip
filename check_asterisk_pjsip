@@ -1,9 +1,6 @@
 #!/usr/bin/perl -T
 # GPLv3+ by Matija Nalis <mnalis-perl@axe.tomsoft.hr> started 2023-01-27
 # checks specific Asterisk / Freepbx PJSIP registrations / endpoints
-#
-# FIXME: define "main::HELP_MESSAGE()" and/or "main::VERSION_MESSAGE()" for nicer help texts
-
 
 use warnings;
 use strict;
@@ -45,19 +42,34 @@ EOF
     exit $NAGIOS{'STATE_UNKNOWN'};
 }
 
+# print message (and update status) if one check is OK
+sub check_is_ok($) {
+    my ($str) = @_;
+    print "OK: $str\n";
+    $ret_value = $NAGIOS{'STATE_OK'} if $ret_value == $NAGIOS{'STATE_UNKNOWN'};		# only UNKNOWN changes to OK
+}
 
-# cmd_exec - executes a given command and return its output
-sub cmd_exec($) {
+# print message (and update status) if one check is WARN
+sub check_is_warn($) {
+    my ($str) = @_;
+    print "WARNING: $str\n";
+    $ret_value = $NAGIOS{'STATE_WARNING'} if $ret_value != $NAGIOS{'STATE_CRITICAL'} ;	# anything but CRITICAL (i.e. UNKNOWN & OK) change to WARNING
+}
+
+# print message (and update status) if one check is CRITICAL
+sub check_is_crit($) {
+    my ($str) = @_;
+    print "CRITICAL: $str\n";
+    $ret_value = $NAGIOS{'STATE_CRITICAL'};	# all change to CRITICAL
+}
+
+# open_asterisk_cmd - executes a given command and returns filehandles to its output $fh
+sub open_asterisk_cmd($) {
     my ($cmd) = @_;
-    $DEBUG > 1 && print STDERR "Executing $ASTERISK $cmd";
+    $DEBUG > 2 && print STDERR "Executing $ASTERISK $cmd\n";
     
     open(my $fh, "-|", $ASTERISK, "-x", $cmd) || die "Can't exec: '$ASTERISK -x $cmd': $! ($?)";
-    
-    my $ret = '';
-    while (<$fh>) {
-        $ret .= $_;
-    }
-    return $ret;
+    return $fh;
 }
 
 ### MAIN ###
@@ -78,9 +90,25 @@ if ($DEBUG =~ /^(\d+)$/) { $DEBUG = $1 } else { die "invalid param -d $DEBUG" }
 # --registration
 sub parse_reg($) {
     my ($reg) = @_;
+    my $found = 0;
     
-    print STDERR "Output: " . cmd_exec('pjsip show registrations');
-    die "FIXME WIP"
+    my $fh = open_asterisk_cmd('pjsip show registrations');
+    while (<$fh>) {
+#  TSMTS/sip:ims.example.com:5060                    TSMTS                       Registered        (exp. 389s)
+        $DEBUG > 5 && print STDERR "Reg output: $_";
+
+        if (m{^\s*${reg}/\S*\s+\S+\s+(\S+)}) {
+            $found++;
+            my $status = $1;
+            $DEBUG > 1 && print STDERR " Reg found for $reg; status: $status\n";
+            if ($status =~ /registered/i) {
+                check_is_ok ("Status for $reg is $status")
+            } else {
+                check_is_crit ("Status for $reg is $status")
+            }
+        }
+    }
+    if ($found != 1) { check_is_warn ("Found $found registration results for $reg, was expecting only one") }
 }
 foreach my $reg (@REGISTRATIONS) {
     if ($reg =~ /^(${VALID_NAME_REGEX})$/) { $reg = $1 } else { die "Invalid name in $reg" }
@@ -89,9 +117,16 @@ foreach my $reg (@REGISTRATIONS) {
     $did_something++;
 }
 
+
+
 # --endpoint
 sub parse_endp($) {
     my ($endp) = @_;
+
+    my $fh = open_asterisk_cmd('pjsip show endpoints');
+    while (<$fh>) {
+        $DEBUG > 5 && print STDERR "Endp output: $_";
+    }
     die "FIXME WIP"
 }
 foreach my $endp (@ENDPOINTS) {
