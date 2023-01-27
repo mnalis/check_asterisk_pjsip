@@ -102,9 +102,9 @@ sub parse_reg($) {
             my $status = $1;
             $DEBUG > 1 && print STDERR " Reg found for $reg; status: $status\n";
             if ($status =~ /registered/i) {
-                check_is_ok ("Registation status for $reg is $status")
+                check_is_ok ("Registration status for $reg is $status")
             } else {
-                check_is_crit ("Registation status for $reg is $status")
+                check_is_crit ("Registration status for $reg is $status")
             }
         }
     }
